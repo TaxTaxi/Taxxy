@@ -1,42 +1,34 @@
-// Fake linked bank accounts
-const linkedAccounts = [
-    { name: "🏦 Chase Checking", type: "Personal", balance: "$4,250.00" },
-    { name: "🏦 Stripe Payouts", type: "Business", balance: "$1,150.00" },
-    { name: "🏦 Wells Fargo Savings", type: "Savings", balance: "$3,900.00" },
-  ];
-  
-  export default function BanksPage() {
-    return (
-      <main className="min-h-screen bg-gray-100 text-black p-8 space-y-10">
-        <h1 className="text-5xl font-bold mb-6">Bank Accounts Page 🔗</h1>
-  
-        {/* Linked Accounts */}
-        <section className="bg-white p-6 rounded-2xl shadow-lg">
-          <h2 className="text-3xl font-semibold mb-4">Linked Accounts</h2>
-          <ul className="space-y-2">
-            {linkedAccounts.map((account, index) => (
-              <li
-                key={index}
-                className="bg-gray-100 p-4 rounded-xl flex justify-between items-center"
-              >
-                <div>
-                  <div className="font-semibold">{account.name}</div>
-                  <div className="text-sm text-gray-600">{account.type} Account</div>
-                </div>
-                <div className="text-right font-bold">{account.balance}</div>
-              </li>
-            ))}
-          </ul>
-  
-          {/* Link New Account Button */}
-          <div className="mt-6">
-            <button className="bg-blue-600 text-white px-6 py-2 rounded-full shadow-md hover:bg-blue-700 transition-all duration-300"
-            >
-              + Link New Account
-            </button>
+"use client";
+
+const fakeIncome = [
+  { id: 1, source: "Company A", amount: 2000, date: "April 25, 2025", emoji: "💼" },
+  { id: 2, source: "Freelance Gig", amount: 600, date: "April 20, 2025", emoji: "🧑‍💻" },
+  { id: 3, source: "Company A", amount: 2000, date: "April 10, 2025", emoji: "💼" },
+  { id: 4, source: "Referral Bonus", amount: 150, date: "April 8, 2025", emoji: "🎁" },
+];
+
+export default function BanksPage() {
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      <h1 className="text-3xl font-bold mb-6 text-gray-800">Recent Income</h1>
+
+      <div className="grid gap-6">
+        {fakeIncome.map((income) => (
+          <div
+            key={income.id}
+            className="bg-white rounded-xl shadow p-6 flex justify-between items-center"
+          >
+            <div className="flex items-center gap-4">
+              <span className="text-2xl">{income.emoji}</span>
+              <div>
+                <div className="text-lg font-medium text-gray-800">{income.source}</div>
+                <div className="text-sm text-gray-500">{income.date}</div>
+              </div>
+            </div>
+            <div className="text-xl font-semibold text-green-600">+${income.amount}</div>
           </div>
-        </section>
-      </main>
-    );
-  }
-  
+        ))}
+      </div>
+    </div>
+  );
+}

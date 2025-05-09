@@ -1,41 +1,41 @@
-// Fake tax data
-const estimatedOwed = 1725.00;
-const reservedTaxes = 1130.00;
-const nextPayment = {
-  date: "June 15, 2025",
-  amount: 1000.00,
+"use client";
+
+const fakeTaxes = {
+  year: 2025,
+  income: 56000,
+  withheld: 7200,
+  estimatedOwed: 1800,
+  estimatedReturn: 400,
 };
 
 export default function TaxesPage() {
   return (
-    <main className="min-h-screen bg-gray-100 text-black p-8 space-y-10">
-      <h1 className="text-5xl font-bold mb-6">Tax Page 💰</h1>
+    <div className="min-h-screen bg-gray-100 p-8">
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">Tax Summary</h1>
 
-      {/* Estimated Taxes Owed */}
-      <section className="bg-white p-6 rounded-2xl shadow">
-        <h2 className="text-3xl font-semibold mb-4">Estimated Taxes Owed</h2>
-        <p className="text-3xl font-bold text-red-600">
-          ${estimatedOwed.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-        </p>
-      </section>
-
-      {/* Reserved for Taxes */}
-      <section className="bg-white p-6 rounded-2xl shadow">
-        <h2 className="text-3xl font-semibold mb-4">Reserved for Taxes</h2>
-        <p className="text-3xl font-bold text-green-600">
-          ${reservedTaxes.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-        </p>
-      </section>
-
-      {/* Next Payment Due */}
-      <section className="bg-white p-6 rounded-2xl shadow">
-        <h2 className="text-3xl font-semibold mb-4">Next Payment Due</h2>
-        <p className="text-lg">
-          {nextPayment.date} — Estimated ${nextPayment.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-        </p>
-      </section>
-    </main>
+      <div className="bg-white shadow rounded-xl p-6 space-y-4 max-w-xl mx-auto">
+        <div className="flex justify-between">
+          <span className="text-gray-600">Tax Year:</span>
+          <span className="font-semibold text-gray-800">{fakeTaxes.year}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Total Income:</span>
+          <span className="font-semibold text-gray-800">${fakeTaxes.income.toLocaleString()}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Taxes Withheld:</span>
+          <span className="font-semibold text-yellow-600">${fakeTaxes.withheld.toLocaleString()}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Estimated Owed:</span>
+          <span className="font-semibold text-red-500">${fakeTaxes.estimatedOwed.toLocaleString()}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Estimated Return:</span>
+          <span className="font-semibold text-green-600">${fakeTaxes.estimatedReturn.toLocaleString()}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
-  
