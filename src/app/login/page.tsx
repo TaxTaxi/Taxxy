@@ -1,51 +1,36 @@
-// src/app/login/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { auth } from "@/lib/firebase";
+import { useState } from "react";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInWithPopup,
   GoogleAuthProvider,
-  onAuthStateChanged,
+  signInWithPopup,
 } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [form, setForm] = useState({ email: "", password: "" });
-  const [mode, setMode] = useState<"login" | "signup">("login");
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isNewUser, setIsNewUser] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        router.push("/dashboard");
-      }
-    });
-    return () => unsub();
-  }, [router]);
-
+  // 🔐 Handle email login or signup
   async function handleEmailAuth(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
     setError("");
-
     try {
-      if (mode === "login") {
-        await signInWithEmailAndPassword(auth, form.email, form.password);
+      if (isNewUser) {
+        await createUserWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, form.email, form.password);
+        await signInWithEmailAndPassword(auth, email, password);
       }
     } catch (err: any) {
       setError(err.message);
-    } finally {
-      setLoading(false);
     }
   }
 
+  // 🔐 Handle Google sign-in
   async function handleGoogleLogin() {
     const provider = new GoogleAuthProvider();
     try {
@@ -56,56 +41,60 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="bg-white p-8 rounded-xl shadow max-w-md w-full space-y-6">
-        <h1 className="text-2xl font-bold text-center">
-          {mode === "login" ? "Log in to Taxxy" : "Create your Taxxy account"}
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+      <div className="bg-white shadow-md rounded-xl w-full max-w-md p-8">
+        <h1 className="text-2xl font-bold mb-6 text-black text-center">
+          Sign in to Taxxy
         </h1>
 
         <form onSubmit={handleEmailAuth} className="space-y-4">
           <input
-            className="w-full p-2 rounded border border-gray-300 text-black"
             type="email"
-            placeholder="Email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
             required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            className="w-full p-2 border border-gray-300 rounded text-black"
           />
           <input
-            className="w-full p-2 rounded border border-gray-300 text-black"
             type="password"
-            placeholder="Password"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
             required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="w-full p-2 border border-gray-300 rounded text-black"
           />
           <button
             type="submit"
-            disabled={loading}
-            className="bg-black text-white w-full py-2 rounded hover:bg-gray-800 transition"
+            className="w-full bg-black text-white py-2 rounded hover:bg-gray-800 transition"
           >
-            {loading ? "Loading..." : mode === "login" ? "Log In" : "Sign Up"}
+            {isNewUser ? "Create Account" : "Log In"}
           </button>
         </form>
 
+        <div className="my-4 text-center text-sm text-black">
+          {isNewUser ? "Already have an account?" : "New here?"}{" "}
+          <button
+            type="button"
+            onClick={() => setIsNewUser(!isNewUser)}
+            className="text-blue-600 hover:underline"
+          >
+            {isNewUser ? "Log In" : "Create One"}
+          </button>
+        </div>
+
+        <hr className="my-6" />
+
         <button
           onClick={handleGoogleLogin}
-          className="w-full bg-white border border-gray-400 text-black py-2 rounded hover:bg-gray-100"
+          className="w-full bg-white border border-gray-400 text-black py-2 rounded hover:bg-gray-100 transition"
         >
           Continue with Google
         </button>
 
-        {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-
-        <p className="text-center text-sm">
-          {mode === "login" ? "New here?" : "Already have an account?"}{" "}
-          <button
-            onClick={() => setMode(mode === "login" ? "signup" : "login")}
-            className="text-blue-500 hover:underline"
-          >
-            {mode === "login" ? "Create one" : "Log in"}
-          </button>
-        </p>
+        {error && (
+          <p className="text-red-500 text-sm mt-4 text-center">{error}</p>
+        )}
       </div>
     </div>
   );
