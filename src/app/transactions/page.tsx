@@ -1,86 +1,91 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTransactionStore, Transaction } from "@/store/transactionStore";
-
-// 🧪 Default fake data (this will be replaced later by bank integration)
-const sampleTransactions: Transaction[] = [
-  {
-    id: 1,
-    name: "Freelance Payment",
-    amount: 1500,
-    date: "2025-05-01",
-    category: "income",
-  },
-  {
-    id: 2,
-    name: "Spotify Subscription",
-    amount: -10,
-    date: "2025-05-02",
-    category: "bill",
-  },
-  {
-    id: 3,
-    name: "Coffee with client",
-    amount: -6,
-    date: "2025-05-03",
-    category: "writeoff",
-    flagged: true,
-  },
-];
+import { useTransactionStore } from "@/store/transactionStore";
 
 export default function TransactionsPage() {
-  const { transactions, setTransactions, updateCategory } = useTransactionStore();
+  const { transactions, addTransaction, updateCategory } = useTransactionStore();
 
-  // 🧠 Load sample transactions only once if store is empty
+  const [form, setForm] = useState({
+    description: "",
+    amount: "",
+    date: "",
+    category: "unassigned",
+  });
+
+  // ✅ Load data from Firestore on first load
   useEffect(() => {
-    if (transactions.length === 0) {
-      setTransactions(sampleTransactions);
-    }
-  }, [transactions.length, setTransactions]);
+    useTransactionStore.getState().loadTransactionsFromFirestore();
+  }, []);
 
-  // 🎨 Color per category
-  const categoryColor = {
-    income: "text-green-600",
-    bill: "text-red-600",
-    writeoff: "text-yellow-600",
-    other: "text-gray-600",
-  };
+  // ✅ Handle form submission
+  function handleAddTransaction(e: React.FormEvent) {
+    e.preventDefault();
+
+    const newTransaction = {
+      id: Date.now(),
+      description: form.description,
+      amount: parseFloat(form.amount),
+      date: form.date,
+      category: form.category as "income" | "expense" | "unassigned",
+    };
+
+    addTransaction(newTransaction);
+    setForm({ description: "", amount: "", date: "", category: "unassigned" });
+  }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Transactions</h1>
+    <div className="p-8 max-w-2xl mx-auto bg-white text-black rounded shadow">
+      <h1 className="text-3xl font-bold mb-6">Transactions</h1>
 
-      <div className="grid gap-4 max-w-2xl">
-        {transactions.map((tx) => (
-          <div
-            key={tx.id}
-            className="bg-white rounded-xl shadow p-5 flex justify-between items-center"
-          >
+      <form onSubmit={handleAddTransaction} className="grid gap-4 mb-8">
+        <input
+          className="p-2 rounded border text-black"
+          placeholder="Description"
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+        />
+        <input
+          className="p-2 rounded border text-black"
+          type="number"
+          placeholder="Amount"
+          value={form.amount}
+          onChange={(e) => setForm({ ...form, amount: e.target.value })}
+        />
+        <input
+          className="p-2 rounded border text-black"
+          type="date"
+          value={form.date}
+          onChange={(e) => setForm({ ...form, date: e.target.value })}
+        />
+        <select
+          className="p-2 rounded border text-black"
+          value={form.category}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              category: e.target.value as "income" | "expense" | "unassigned",
+            })
+          }
+        >
+          <option value="unassigned">Unassigned</option>
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+        </select>
+        <button className="bg-black text-white py-2 rounded hover:bg-gray-800">
+          Add Transaction
+        </button>
+      </form>
+
+      <div className="space-y-4">
+        {transactions.map((t) => (
+          <div key={t.id} className="bg-white p-4 rounded shadow flex justify-between">
             <div>
-              <div className="text-lg font-medium text-gray-800">{tx.name}</div>
-              <div className="text-sm text-gray-500">{tx.date}</div>
-              {tx.flagged && (
-                <div className="text-xs text-orange-600 mt-1">⚠️ Flagged for review</div>
-              )}
+              <div className="font-medium">{t.description}</div>
+              <div className="text-sm text-gray-500">{t.date}</div>
+              <div className="text-sm text-gray-400">Category: {t.category}</div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className={`text-lg font-semibold ${categoryColor[tx.category ?? "other"]}`}>
-                ${Math.abs(tx.amount)}
-              </div>
-              <select
-                value={tx.category ?? "other"}
-                onChange={(e) =>
-                  updateCategory(tx.id, e.target.value as Transaction["category"])
-                }
-                className="p-1 border border-gray-300 rounded text-sm"
-              >
-                <option value="income">Income</option>
-                <option value="bill">Bill</option>
-                <option value="writeoff">Write-Off</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
+            <div className="text-lg font-semibold text-green-700">${t.amount}</div>
           </div>
         ))}
       </div>

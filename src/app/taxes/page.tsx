@@ -1,41 +1,36 @@
 "use client";
 
-const fakeTaxes = {
-  year: 2025,
-  income: 56000,
-  withheld: 7200,
-  estimatedOwed: 1800,
-  estimatedReturn: 400,
-};
+import { useIncomeStore } from "@/store/incomeStore";
+import { useBillStore } from "@/store/billStore";
 
 export default function TaxesPage() {
+  const incomeItems = useIncomeStore((state) => state.incomeItems);
+  const bills = useBillStore((state) => state.bills);
+
+  // ✅ Calculate totals
+  const totalIncome = incomeItems.reduce((sum, i) => sum + i.amount, 0);
+  const totalExpenses = bills.reduce((sum, b) => sum + b.amount, 0);
+  const netProfit = totalIncome - totalExpenses;
+  const estimatedTax = Math.max(0, netProfit * 0.2);
+
   return (
     <div className="min-h-screen bg-gray-100 p-8">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Tax Summary</h1>
+      <h1 className="text-3xl font-bold mb-6 text-gray-800">Tax Summary</h1>
 
-      <div className="bg-white shadow rounded-xl p-6 space-y-4 max-w-xl mx-auto">
-        <div className="flex justify-between">
-          <span className="text-gray-600">Tax Year:</span>
-          <span className="font-semibold text-gray-800">{fakeTaxes.year}</span>
+      <div className="bg-white rounded-xl shadow p-6 max-w-xl space-y-4">
+        <div className="text-lg text-gray-700">
+          <strong>Total Income:</strong> ${totalIncome.toFixed(2)}
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-600">Total Income:</span>
-          <span className="font-semibold text-gray-800">${fakeTaxes.income.toLocaleString()}</span>
+        <div className="text-lg text-gray-700">
+          <strong>Total Bills (Expenses):</strong> ${totalExpenses.toFixed(2)}
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-600">Taxes Withheld:</span>
-          <span className="font-semibold text-yellow-600">${fakeTaxes.withheld.toLocaleString()}</span>
+        <div className="text-lg text-gray-700">
+          <strong>Net Profit:</strong> ${netProfit.toFixed(2)}
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-600">Estimated Owed:</span>
-          <span className="font-semibold text-red-500">${fakeTaxes.estimatedOwed.toLocaleString()}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-600">Estimated Return:</span>
-          <span className="font-semibold text-green-600">${fakeTaxes.estimatedReturn.toLocaleString()}</span>
+        <div className="text-lg text-red-600 font-semibold">
+          <strong>Estimated Tax Owed:</strong> ${estimatedTax.toFixed(2)}
         </div>
       </div>
     </div>
   );
 }
-
