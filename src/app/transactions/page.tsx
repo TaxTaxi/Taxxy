@@ -35,60 +35,40 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="p-8 max-w-2xl mx-auto bg-white text-black rounded shadow">
-      <h1 className="text-3xl font-bold mb-6">Transactions</h1>
+  <div className="min-h-screen bg-gray-100 p-8">
+    <h1 className="text-3xl font-bold mb-6 text-gray-800">Transactions</h1>
 
-      <form onSubmit={handleAddTransaction} className="grid gap-4 mb-8">
-        <input
-          className="p-2 rounded border text-black"
-          placeholder="Description"
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-        />
-        <input
-          className="p-2 rounded border text-black"
-          type="number"
-          placeholder="Amount"
-          value={form.amount}
-          onChange={(e) => setForm({ ...form, amount: e.target.value })}
-        />
-        <input
-          className="p-2 rounded border text-black"
-          type="date"
-          value={form.date}
-          onChange={(e) => setForm({ ...form, date: e.target.value })}
-        />
-        <select
-          className="p-2 rounded border text-black"
-          value={form.category}
-          onChange={(e) =>
-            setForm({
-              ...form,
-              category: e.target.value as "income" | "expense" | "unassigned",
-            })
-          }
-        >
-          <option value="unassigned">Unassigned</option>
-          <option value="income">Income</option>
-          <option value="expense">Expense</option>
-        </select>
-        <button className="bg-black text-white py-2 rounded hover:bg-gray-800">
-          Add Transaction
-        </button>
-      </form>
+    {/* Optional: Form to add transactions can go here later */}
 
-      <div className="space-y-4">
-        {transactions.map((t) => (
-          <div key={t.id} className="bg-white p-4 rounded shadow flex justify-between">
+    <div className="space-y-4">
+      {transactions.map((t) => (
+        <div key={t.id} className="bg-white p-4 rounded shadow">
+          <div className="flex justify-between items-start">
             <div>
-              <div className="font-medium">{t.description}</div>
+              <div className="font-medium text-gray-800">{t.description}</div>
               <div className="text-sm text-gray-500">{t.date}</div>
               <div className="text-sm text-gray-400">Category: {t.category}</div>
+              {t.tag && (
+                <div className="text-xs text-blue-500 mt-1">Tag: {t.tag}</div>
+              )}
+              <input
+                type="text"
+                className="border border-gray-300 p-2 rounded text-sm text-black mt-2"
+                placeholder="Add a tag (e.g., Rent, W-2, Bonus)"
+                defaultValue={t.tag || ""}
+                onBlur={(e) => {
+                  const tag = e.target.value.trim();
+                  useTransactionStore.getState().updateTag(t.id, tag);
+                }}
+              />
             </div>
-            <div className="text-lg font-semibold text-green-700">${t.amount}</div>
+            <div className="text-lg font-semibold text-green-700">
+              ${t.amount}
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
-  );
+  </div>
+);
 }

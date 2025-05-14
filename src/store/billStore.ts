@@ -1,7 +1,18 @@
+// src/store/billStore.ts
 import { create } from "zustand";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  deleteDoc,
+  doc,
+  updateDoc,
+  query,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export interface Bill {
-  id: number;
+  id: string;
   name: string;
   amount: number;
   due: string;
@@ -12,54 +23,47 @@ export interface Bill {
 
 type BillState = {
   bills: Bill[];
-  addBill: (bill: Bill) => void;
-  removeBill: (id: number) => void;
-  setBills: (bills: Bill[]) => void;
-  togglePaid: (id: number) => void;
-  loadBillsFromStorage: () => void;
+  addBill: (bill: Omit<Bill, "id">) => Promise<void>;
+  removeBill: (id: string) => Promise<void>;
+  togglePaid: (id: string) => Promise<void>;
+  loadBillsFromFirestore: () => Promise<void>;
 };
 
 export const useBillStore = create<BillState>((set, get) => ({
   bills: [],
 
-  addBill: (bill) => {
-    const updated = [...get().bills, bill];
-    set({ bills: updated });
-    localStorage.setItem("taxxy_bills", JSON.stringify(updated));
+  addBill: async (bill) => {
+    const docRef = await addDoc(collection(db, "bills"), bill);
+    set((state) => ({
+      bills: [...state.bills, { ...bill, id: docRef.id }],
+    }));
   },
 
-  removeBill: (id) => {
-    const updated = get().bills.filter((b) => b.id !== id);
-    set({ bills: updated });
-    localStorage.setItem("taxxy_bills", JSON.stringify(updated));
+  removeBill: async (id) => {
+    await deleteDoc(doc(db, "bills", id));
+    set((state) => ({
+      bills: state.bills.filter((bill) => bill.id !== id),
+    }));
   },
 
-  togglePaid: (id) => {
-    const updated = get().bills.map((bill) =>
-      bill.id === id ? { ...bill, paid: !bill.paid } : bill
-    );
-    set({ bills: updated });
-    localStorage.setItem("taxxy_bills", JSON.stringify(updated));
+  togglePaid: async (id) => {
+    const target = get().bills.find((b) => b.id === id);
+    if (!target) return;
+
+    const updated = { ...target, paid: !target.paid };
+    await updateDoc(doc(db, "bills", id), { paid: updated.paid });
+
+    set((state) => ({
+      bills: state.bills.map((b) => (b.id === id ? updated : b)),
+    }));
   },
 
-  setBills: (bills) => {
+  loadBillsFromFirestore: async () => {
+    const snapshot = await getDocs(query(collection(db, "bills")));
+    const bills: Bill[] = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Omit<Bill, "id">),
+    }));
     set({ bills });
-    localStorage.setItem("taxxy_bills", JSON.stringify(bills));
-  },
-
-  loadBillsFromStorage: () => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("taxxy_bills");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            set({ bills: parsed });
-          }
-        } catch {
-          // ignore bad data
-        }
-      }
-    }
   },
 }));

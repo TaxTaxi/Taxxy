@@ -8,7 +8,7 @@ export default function IncomePage() {
   const { incomeItems, addIncome, removeIncome } = useIncomeStore();
   
   useEffect(() => {
-    useIncomeStore.getState().loadIncomeFromStorage();
+    useIncomeStore.getState().loadIncomeFromFirestore();
   }, []);
   
   // ✅ Form state for adding a new income entry

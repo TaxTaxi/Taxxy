@@ -7,62 +7,74 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-// ✅ Define what a transaction looks like
+// ✅ Define a transaction type
 export interface Transaction {
   id: number;
   description: string;
   amount: number;
   date: string;
   category: "income" | "expense" | "unassigned";
+  tag?: string; // ✅ NEW: user-defined tag like "W-2", "Rent", etc.
 }
 
-// ✅ Define Zustand store shape
+// ✅ Define input structure for new transactions (without id/category)
+type NewTransactionInput = {
+  description: string;
+  amount: number;
+  date: string;
+};
+
+// ✅ Zustand state type
 type TransactionState = {
   transactions: Transaction[];
   setTransactions: (items: Transaction[]) => void;
   addTransaction: (item: Transaction) => void;
   updateCategory: (id: number, category: Transaction["category"]) => void;
   loadTransactionsFromFirestore: () => void;
+  updateTag: (id: number, tag: string) => void; // ✅ NEW
 };
 
-// ✅ Create Zustand store with Firestore integration
+// ✅ Zustand store implementation
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   transactions: [],
 
-  // Replace all transactions
   setTransactions: (items) => set({ transactions: items }),
 
-  // Add new transaction (and save to Firestore)
-  addTransaction: async (item) => {
-    console.log("🟡 Attempting to save transaction:", item);
+  addTransaction: async (item: NewTransactionInput) => {
+    // Create a full transaction object (id + default category)
+    const newItem: Transaction = {
+      id: Date.now(),
+      category: "unassigned",
+      ...item,
+    };
 
-    try {
-      await addDoc(collection(db, "transactions"), {
-        ...item,
-      });
+    // Save to Firestore
+    await addDoc(collection(db, "transactions"), newItem);
 
-      const newItem = { ...item, id: Date.now() }; // Local fallback ID
-      set((state) => ({
-        transactions: [...state.transactions, newItem],
-      }));
-
-      console.log("✅ Saved to Firestore!");
-    } catch (err) {
-      console.error("❌ Firestore save failed:", err);
-    }
+    // Update Zustand
+    set((state) => ({
+      transactions: [...state.transactions, newItem],
+    }));
   },
 
-  // Update the category of a transaction
   updateCategory: async (id, category) => {
     const updated = get().transactions.map((tx) =>
       tx.id === id ? { ...tx, category } : tx
     );
     set({ transactions: updated });
 
-    // (Optional) If using Firestore doc IDs later, add update logic here
+    // Optional Firestore sync
   },
 
-  // Load all transactions from Firestore into Zustand
+  updateTag: (id, tag) => {
+  const updated = get().transactions.map((tx) =>
+    tx.id === id ? { ...tx, tag } : tx
+  );
+  set({ transactions: updated });
+
+  // Optional: update Firestore if you're storing full tags there
+},
+
   loadTransactionsFromFirestore: async () => {
     const q = query(collection(db, "transactions"));
     const snapshot = await getDocs(q);
@@ -71,7 +83,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     snapshot.forEach((doc) => {
       const t = doc.data();
       data.push({
-        id: Date.now() + Math.random(), // Local fallback ID
+        id: Date.now() + Math.random(), // placeholder id
         description: t.description,
         amount: t.amount,
         date: t.date,
@@ -79,7 +91,6 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       });
     });
 
-    console.log("📥 Loaded transactions from Firestore:", data);
     set({ transactions: data });
   },
 }));

@@ -1,34 +1,39 @@
 "use client";
 
-import { useIncomeStore } from "@/store/incomeStore";
+import { useEffect } from "react";
 import { useBillStore } from "@/store/billStore";
+import { useIncomeStore } from "@/store/incomeStore";
 
 export default function TaxesPage() {
-  const incomeItems = useIncomeStore((state) => state.incomeItems);
-  const bills = useBillStore((state) => state.bills);
+  const { bills, loadBillsFromFirestore } = useBillStore();
+  const { incomeItems, loadIncomeFromFirestore } = useIncomeStore();
 
-  // ✅ Calculate totals
-  const totalIncome = incomeItems.reduce((sum, i) => sum + i.amount, 0);
-  const totalExpenses = bills.reduce((sum, b) => sum + b.amount, 0);
-  const netProfit = totalIncome - totalExpenses;
-  const estimatedTax = Math.max(0, netProfit * 0.2);
+  // ✅ Load data on mount
+  useEffect(() => {
+    loadBillsFromFirestore();
+    loadIncomeFromFirestore();
+  }, []);
+
+  const totalIncome = incomeItems.reduce((sum, item) => sum + item.amount, 0);
+  const totalBills = bills.reduce((sum, bill) => sum + bill.amount, 0);
+  const taxableIncome = totalIncome - totalBills;
+  const estimatedTax = taxableIncome * 0.25;
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">Tax Summary</h1>
-
-      <div className="bg-white rounded-xl shadow p-6 max-w-xl space-y-4">
-        <div className="text-lg text-gray-700">
+    <div className="p-8 max-w-2xl mx-auto">
+      <h1 className="text-3xl font-bold mb-6 text-gray-100">Tax Overview</h1>
+      <div className="bg-white shadow rounded-xl p-6 space-y-4 text-gray-700">
+        <div>
           <strong>Total Income:</strong> ${totalIncome.toFixed(2)}
         </div>
-        <div className="text-lg text-gray-700">
-          <strong>Total Bills (Expenses):</strong> ${totalExpenses.toFixed(2)}
+        <div>
+          <strong>Total Bills:</strong> ${totalBills.toFixed(2)}
         </div>
-        <div className="text-lg text-gray-700">
-          <strong>Net Profit:</strong> ${netProfit.toFixed(2)}
+        <div>
+          <strong>Taxable Income:</strong> ${taxableIncome.toFixed(2)}
         </div>
-        <div className="text-lg text-red-600 font-semibold">
-          <strong>Estimated Tax Owed:</strong> ${estimatedTax.toFixed(2)}
+        <div>
+          <strong>Estimated Tax (25%):</strong> ${estimatedTax.toFixed(2)}
         </div>
       </div>
     </div>

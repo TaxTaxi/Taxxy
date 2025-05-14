@@ -27,11 +27,12 @@ function sortByDueDate(billA: Bill, billB: Bill) {
 }
 
 export default function BillsPage() {
-    const { bills, addBill, removeBill, setBills, togglePaid } = useBillStore();
+   const { bills, addBill, removeBill, togglePaid } = useBillStore();
    
-    useEffect(() => {
-        useBillStore.getState().loadBillsFromStorage();
-      }, []);
+useEffect(() => {
+  useBillStore.getState().loadBillsFromFirestore();
+}, []);
+
       
     // ✅ Grouping logic: separate lists for rendering
     const unpaidBills = bills
@@ -69,7 +70,7 @@ export default function BillsPage() {
     function handleAddBill(e: React.FormEvent) {
         e.preventDefault();
         const newBill: Bill = {
-            id: Date.now(),
+           id: String(Date.now()),
             name: form.name || "New Bill",
             amount: parseFloat(form.amount) || 0,
             due: form.due || "",
