@@ -3,6 +3,8 @@ import {
   collection,
   addDoc,
   getDocs,
+  updateDoc,
+  doc,
   query,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -14,83 +16,112 @@ export interface Transaction {
   amount: number;
   date: string;
   category: "income" | "expense" | "unassigned";
-  tag?: string; // ✅ NEW: user-defined tag like "W-2", "Rent", etc.
+  tag?: string;
+  firestoreId?: string; // Needed for updates in Firestore
 }
-
-// ✅ Define input structure for new transactions (without id/category)
-type NewTransactionInput = {
-  description: string;
-  amount: number;
-  date: string;
-};
 
 // ✅ Zustand state type
 type TransactionState = {
   transactions: Transaction[];
   setTransactions: (items: Transaction[]) => void;
-  addTransaction: (item: Transaction) => void;
+  addTransaction: (item: Omit<Transaction, "id" | "category">) => void;
   updateCategory: (id: number, category: Transaction["category"]) => void;
+  updateTag: (id: number, tag: string) => void;
   loadTransactionsFromFirestore: () => void;
-  updateTag: (id: number, tag: string) => void; // ✅ NEW
+  tagAllTransactionsWithAI: () => void;
 };
 
-// ✅ Zustand store implementation
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   transactions: [],
 
   setTransactions: (items) => set({ transactions: items }),
 
-  addTransaction: async (item: NewTransactionInput) => {
-    // Create a full transaction object (id + default category)
+  addTransaction: async (item) => {
     const newItem: Transaction = {
+      ...item,
       id: Date.now(),
       category: "unassigned",
-      ...item,
     };
 
-    // Save to Firestore
-    await addDoc(collection(db, "transactions"), newItem);
+    const docRef = await addDoc(collection(db, "transactions"), newItem);
+    newItem.firestoreId = docRef.id;
 
-    // Update Zustand
     set((state) => ({
       transactions: [...state.transactions, newItem],
     }));
   },
 
-  updateCategory: async (id, category) => {
+  updateCategory: (id, category) => {
     const updated = get().transactions.map((tx) =>
       tx.id === id ? { ...tx, category } : tx
     );
     set({ transactions: updated });
-
-    // Optional Firestore sync
   },
 
-  updateTag: (id, tag) => {
-  const updated = get().transactions.map((tx) =>
-    tx.id === id ? { ...tx, tag } : tx
-  );
-  set({ transactions: updated });
+  updateTag: async (id, tag) => {
+    const tx = get().transactions.find((t) => t.id === id);
+    if (!tx || !tx.firestoreId) return;
 
-  // Optional: update Firestore if you're storing full tags there
-},
+    const updated = get().transactions.map((t) =>
+      t.id === id ? { ...t, tag } : t
+    );
+    set({ transactions: updated });
+
+    await updateDoc(doc(db, "transactions", tx.firestoreId), { tag });
+  },
 
   loadTransactionsFromFirestore: async () => {
     const q = query(collection(db, "transactions"));
     const snapshot = await getDocs(q);
 
     const data: Transaction[] = [];
-    snapshot.forEach((doc) => {
-      const t = doc.data();
+    snapshot.forEach((docSnap) => {
+      const t = docSnap.data();
       data.push({
-        id: Date.now() + Math.random(), // placeholder id
+        id: Date.now() + Math.random(),
         description: t.description,
         amount: t.amount,
         date: t.date,
-        category: t.category,
+        category: t.category || "unassigned",
+        tag: t.tag,
+        firestoreId: docSnap.id,
       });
     });
 
     set({ transactions: data });
+  },
+
+  tagAllTransactionsWithAI: async () => {
+    const transactions = get().transactions;
+    const openaiKey = process.env.NEXT_PUBLIC_OPENAI_KEY;
+
+    if (!openaiKey) {
+      console.warn("Missing OpenAI key");
+      return;
+    }
+
+    for (const tx of transactions) {
+      if (tx.tag) continue;
+
+      const prompt = `Given the following transaction description, suggest a short tag: "${tx.description}"`;
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openaiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-3.5-turbo",
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+
+      const json = await response.json();
+      const suggestion = json.choices?.[0]?.message?.content?.trim();
+
+      if (suggestion) {
+        await get().updateTag(tx.id, suggestion);
+      }
+    }
   },
 }));
