@@ -1,48 +1,49 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useBillStore } from "@/store/billStore";
-import { useIncomeStore } from "@/store/incomeStore";
+import { useEffect } from "react";
+import { useTransactionStore } from "@/store/transactionStore";
 
 export default function Dashboard() {
-  const { bills, loadBillsFromFirestore } = useBillStore();
-  const { incomeItems, loadIncomeFromFirestore } = useIncomeStore();
+  const { transactions } = useTransactionStore();
 
-  const [isClient, setIsClient] = useState(false);
-
-  // ✅ Load data from Firestore on mount
   useEffect(() => {
-    setIsClient(true);
-    useBillStore.getState().loadBillsFromFirestore();
-    useIncomeStore.getState().loadIncomeFromFirestore();
+    useTransactionStore.getState().loadTransactionsFromFirestore();
   }, []);
 
-  if (!isClient) return null;
+  const totalIncome = transactions
+    .filter((t) => t.category === "income")
+    .reduce((sum, t) => sum + t.amount, 0);
 
-  const totalIncome = incomeItems.reduce((sum, income) => sum + income.amount, 0);
-  const totalBills = bills.reduce((sum, bill) => sum + bill.amount, 0);
-  const netBalance = totalIncome - totalBills;
+  const totalExpense = transactions
+    .filter((t) => t.category === "expense")
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const lowConfidenceCount = transactions.filter(
+    (t) => t.confidence !== undefined && t.confidence < 0.7
+  ).length;
+
+  const unreviewedCount = transactions.filter((t) => !t.reviewed).length;
 
   return (
-    <div className="min-h-screen p-8 bg-gray-50 text-gray-800">
-      <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
+    <div className="p-8">
+      <h1 className="text-3xl font-bold mb-6 text-gray-200">Dashboard</h1>
 
-      <div className="grid gap-6 max-w-2xl">
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-xl font-semibold">Total Income</h2>
-          <p className="text-green-600 text-2xl mt-2">${totalIncome.toFixed(2)}</p>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="bg-white p-4 rounded shadow">
+          <h2 className="text-sm text-gray-500">Total Income</h2>
+          <p className="text-xl font-bold text-green-700">${totalIncome.toFixed(2)}</p>
         </div>
-
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-xl font-semibold">Total Bills</h2>
-          <p className="text-red-600 text-2xl mt-2">${totalBills.toFixed(2)}</p>
+        <div className="bg-white p-4 rounded shadow">
+          <h2 className="text-sm text-gray-500">Total Expenses</h2>
+          <p className="text-xl font-bold text-green-700">${totalExpense.toFixed(2)}</p>
         </div>
-
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-xl font-semibold">Net Balance</h2>
-          <p className={`text-2xl mt-2 ${netBalance >= 0 ? "text-green-700" : "text-red-700"}`}>
-            ${netBalance.toFixed(2)}
-          </p>
+        <div className="bg-white p-4 rounded shadow">
+          <h2 className="text-sm text-gray-500">Unreviewed</h2>
+          <p className="text-xl font-bold text-red-500">{unreviewedCount}</p>
+        </div>
+        <div className="bg-white p-4 rounded shadow">
+          <h2 className="text-sm text-gray-500">Low Confidence</h2>
+          <p className="text-xl font-bold text-yellow-400">{lowConfidenceCount}</p>
         </div>
       </div>
     </div>
