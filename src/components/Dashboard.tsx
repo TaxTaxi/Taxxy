@@ -4,10 +4,10 @@ import { useEffect } from "react";
 import { useTransactionStore } from "@/store/transactionStore";
 
 export default function Dashboard() {
-  const { transactions } = useTransactionStore();
+  const { transactions, loadTransactions } = useTransactionStore();
 
   useEffect(() => {
-    useTransactionStore.getState().loadTransactionsFromFirestore();
+    loadTransactions(); // ✅ Supabase version
   }, []);
 
   const totalIncome = transactions

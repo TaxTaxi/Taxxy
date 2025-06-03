@@ -1,69 +1,86 @@
 // src/store/billStore.ts
 import { create } from "zustand";
-import {
-  collection,
-  addDoc,
-  getDocs,
-  deleteDoc,
-  doc,
-  updateDoc,
-  query,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 
 export interface Bill {
-  id: string;
+  id: string; // Supabase UUID
   name: string;
   amount: number;
-  due: string;
-  emoji: string;
-  frequency?: "once" | "weekly" | "monthly" | "yearly";
+  dueDate: string; // changed to `due` to match your page.tsx
+  frequency?: "monthly" | "weekly" | "yearly" | "once";
   paid?: boolean;
+  emoji?: string;
+  user_id?: string;
 }
 
 type BillState = {
   bills: Bill[];
-  addBill: (bill: Omit<Bill, "id">) => Promise<void>;
+  setBills: (items: Bill[]) => void;
+  loadBills: () => Promise<void>;
+  addBill: (item: Omit<Bill, "id">) => Promise<void>;
   removeBill: (id: string) => Promise<void>;
-  togglePaid: (id: string) => Promise<void>;
-  loadBillsFromFirestore: () => Promise<void>;
+  togglePaid: (id: string) => void;
 };
 
 export const useBillStore = create<BillState>((set, get) => ({
   bills: [],
 
-  addBill: async (bill) => {
-    const docRef = await addDoc(collection(db, "bills"), bill);
-    set((state) => ({
-      bills: [...state.bills, { ...bill, id: docRef.id }],
-    }));
+  setBills: (items) => set({ bills: items }),
+
+  loadBills: async () => {
+    const { data, error } = await supabase.from("bills").select("*");
+    if (error) {
+      console.error("❌ Error loading bills:", error);
+      return;
+    }
+    set({ bills: data });
   },
 
-  removeBill: async (id) => {
-    await deleteDoc(doc(db, "bills", id));
+ addBill: async (item) => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    console.error("❌ No user session found");
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("bills")
+    .insert([
+      {
+        ...item,
+        user_id: user.id, // ✅ attach user ID
+      },
+    ])
+    .select();
+
+  if (error || !data || !data[0]) {
+    console.error("❌ Supabase insert failed", error);
+    return;
+  }
+
+  set((state) => ({ bills: [...state.bills, data[0]] }));
+},
+
+  removeBill: async (id: string) => {
+    const { error } = await supabase.from("bills").delete().eq("id", id);
+    if (error) {
+      console.error("❌ Error deleting bill:", error);
+      return;
+    }
+
     set((state) => ({
       bills: state.bills.filter((bill) => bill.id !== id),
     }));
   },
 
-  togglePaid: async (id) => {
-    const target = get().bills.find((b) => b.id === id);
-    if (!target) return;
-
-    const updated = { ...target, paid: !target.paid };
-    await updateDoc(doc(db, "bills", id), { paid: updated.paid });
-
+  togglePaid: (id) => {
     set((state) => ({
-      bills: state.bills.map((b) => (b.id === id ? updated : b)),
+      bills: state.bills.map((bill) =>
+        bill.id === id ? { ...bill, paid: !bill.paid } : bill
+      ),
     }));
-  },
-
-  loadBillsFromFirestore: async () => {
-    const snapshot = await getDocs(query(collection(db, "bills")));
-    const bills: Bill[] = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...(doc.data() as Omit<Bill, "id">),
-    }));
-    set({ bills });
   },
 }));

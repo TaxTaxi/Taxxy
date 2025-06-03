@@ -1,63 +1,83 @@
+// src/store/incomeStore.ts
 import { create } from "zustand";
-import {
-  collection,
-  addDoc,
-  getDocs,
-  query,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 
-// ✅ Define the shape of income entries
 export interface Income {
-  id: number;
-  name: string;
+  id: string;
+  description: string;
   amount: number;
   date: string;
-  frequency?: "once" | "weekly" | "monthly" | "yearly";
+  type?: string;
+  user_id?: string;
 }
 
 type IncomeState = {
-  incomeItems: Income[];
-  addIncome: (item: Income) => void;
-  removeIncome: (id: number) => void;
+  income: Income[];
   setIncome: (items: Income[]) => void;
-  loadIncomeFromFirestore: () => void; // ✅ new
+  loadIncome: () => Promise<void>;
+  addIncome: (item: Omit<Income, "id" | "user_id">) => Promise<void>;
+  removeIncome: (id: string) => Promise<void>;
 };
 
 export const useIncomeStore = create<IncomeState>((set, get) => ({
-  incomeItems: [],
+  income: [],
+
+  setIncome: (items) => set({ income: items }),
+
+  loadIncome: async () => {
+    const { data, error } = await supabase.from("income").select("*");
+    if (error) {
+      console.error("❌ Error loading income:", error);
+      return;
+    }
+    set({ income: data });
+  },
 
   addIncome: async (item) => {
-    await addDoc(collection(db, "income"), item);
-    const updated = [...get().incomeItems, item];
-    set({ incomeItems: updated });
-  },
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-  removeIncome: (id) => {
-    const updated = get().incomeItems.filter((i) => i.id !== id);
-    set({ incomeItems: updated });
-  },
+    if (!user || authError) {
+      console.error("❌ Auth error when adding income:", authError);
+      return;
+    }
 
-  setIncome: (items) => {
-    set({ incomeItems: items });
-  },
+    const itemWithUser = {
+      ...item,
+      user_id: user.id,
+    };
 
-  loadIncomeFromFirestore: async () => {
-    const q = query(collection(db, "income"));
-    const snapshot = await getDocs(q);
+    const { data, error } = await supabase
+      .from("income")
+      .insert([itemWithUser])
+      .select();
 
-    const loaded: Income[] = [];
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      loaded.push({
-        id: Date.now() + Math.random(), // temporary local ID
-        name: data.name,
-        amount: data.amount,
-        date: data.date,
-        frequency: data.frequency,
+    if (error || !data || !data[0]) {
+      console.error("❌ Supabase insert failed", {
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
       });
-    });
+      return;
+    }
 
-    set({ incomeItems: loaded });
+    const newIncome = data[0];
+    set((state) => ({
+      income: [...state.income, newIncome],
+    }));
+  },
+
+  removeIncome: async (id: string) => {
+    const { error } = await supabase.from("income").delete().eq("id", id);
+    if (error) {
+      console.error("❌ Error deleting income:", error);
+      return;
+    }
+
+    set((state) => ({
+      income: state.income.filter((inc) => inc.id !== id),
+    }));
   },
 }));

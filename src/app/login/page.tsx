@@ -1,43 +1,35 @@
+// app/login/page.tsx
 "use client";
 
 import { useState } from "react";
-import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
-} from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isNewUser, setIsNewUser] = useState(false);
   const [error, setError] = useState("");
 
-  // 🔐 Handle email login or signup
   async function handleEmailAuth(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    try {
-      if (isNewUser) {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
-    } catch (err: any) {
-      setError(err.message);
+
+    const { error } = isNewUser
+      ? await supabase.auth.signUp({ email, password })
+      : await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      router.push("/"); // ✅ redirect to home or dashboard
     }
   }
 
-  // 🔐 Handle Google sign-in
   async function handleGoogleLogin() {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (err: any) {
-      setError(err.message);
-    }
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
+    if (error) setError(error.message);
   }
 
   return (

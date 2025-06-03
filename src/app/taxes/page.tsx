@@ -4,23 +4,25 @@ import { useEffect, useMemo, useState } from "react";
 import { useBillStore } from "@/store/billStore";
 import { useIncomeStore } from "@/store/incomeStore";
 import { useTransactionStore } from "@/store/transactionStore";
+import { useCorrectionStore } from "@/store/correctionStore";
+
 import { generateTaxSummary } from "@/utils/generatetaxsummary";
-import { Transaction } from "@/store/transactionStore"; 
+import { Transaction } from "@/store/transactionStore";
 import { getRelevantCorrections } from "@/utils/getRelevantCorrections";
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 
 export default function TaxesPage() {
-  const { loadBillsFromFirestore } = useBillStore();
-  const { loadIncomeFromFirestore } = useIncomeStore();
-  const { transactions, loadTransactionsFromFirestore } = useTransactionStore();
+  const { loadBills } = useBillStore();
+  const { loadIncome } = useIncomeStore();
+  const { transactions, loadTransactions } = useTransactionStore();
+  const { loadCorrections } = useCorrectionStore();
 
   const [showWriteOffs, setShowWriteOffs] = useState(false);
 
   useEffect(() => {
-    loadBillsFromFirestore();
-    loadIncomeFromFirestore();
-    loadTransactionsFromFirestore();
+    loadBills();
+    loadIncome();
+    loadTransactions();
+    loadCorrections();
   }, []);
 
   const summary = generateTaxSummary(transactions);
@@ -41,26 +43,15 @@ export default function TaxesPage() {
 
       <div className="bg-white shadow rounded-xl p-6 space-y-4 text-gray-700">
         <h2 className="text-xl font-semibold mb-2">🧠 AI-Powered Tax Summary</h2>
-        <div>
-          <strong>Transaction Income:</strong> ${summary.totalIncome.toFixed(2)}
-        </div>
-        <div>
-          <strong>Business Expenses:</strong> ${summary.businessExpenses.toFixed(2)}
-        </div>
-        <div>
-          <strong>Taxable Income:</strong> ${summary.taxableIncome.toFixed(2)}
-        </div>
-        <div>
-          <strong>Estimated Tax Owed (25%):</strong> ${summary.estimatedTaxOwed.toFixed(2)}
-        </div>
+        <div><strong>Transaction Income:</strong> ${summary.totalIncome.toFixed(2)}</div>
+        <div><strong>Business Expenses:</strong> ${summary.businessExpenses.toFixed(2)}</div>
+        <div><strong>Taxable Income:</strong> ${summary.taxableIncome.toFixed(2)}</div>
+        <div><strong>Estimated Tax Owed (25%):</strong> ${summary.estimatedTaxOwed.toFixed(2)}</div>
       </div>
 
       <div className="bg-white shadow rounded-xl p-6 space-y-4 text-gray-700">
         <h2 className="text-xl font-semibold mb-2">🧾 Write-Off Summary</h2>
-        <p>
-          {writeOffs.length} transaction{writeOffs.length !== 1 ? "s" : ""} flagged as
-          write-offs
-        </p>
+        <p>{writeOffs.length} transaction{writeOffs.length !== 1 ? "s" : ""} flagged as write-offs</p>
         <p>Total write-off amount: ${totalWriteOffAmount.toFixed(2)}</p>
 
         <button
@@ -82,8 +73,6 @@ export default function TaxesPage() {
   );
 }
 
-// 🔧 Inline editor component for write-offsimport { useEffect, useState } from "react";
-
 function EditableWriteOffItem({ tx }: { tx: Transaction }) {
   const [editing, setEditing] = useState(false);
   const [reason, setReason] = useState(tx.writeOff?.reason || "");
@@ -94,13 +83,7 @@ function EditableWriteOffItem({ tx }: { tx: Transaction }) {
   const updateTx = useTransactionStore((s) => s.updatePurpose);
 
   const handleSave = async () => {
-    await updateTx(tx.id, purpose);
-    await updateDoc(doc(db, "transactions", tx.firestoreId!), {
-      writeOff: {
-        isWriteOff: true,
-        reason,
-      },
-    });
+    await updateTx(tx.id, purpose, reason); // 🧠 Supabase-based update
     setEditing(false);
   };
 
