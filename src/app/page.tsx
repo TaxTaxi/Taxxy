@@ -31,10 +31,33 @@ export default function DashboardPage() {
           <h2 className="text-xl font-semibold mb-2">💸 Total Expenses</h2>
           <p className="text-2xl text-red-600">${totalExpenses.toFixed(2)}</p>
         </div>
+<div className="bg-[red] text-white p-4">
+  Hardcoded Red Test ✅
+</div>
+<div className="space-y-4 p-6">
+  <div className="bg-testBlue text-white p-4 rounded">
+    Test Blue Background
+  </div>
+  <div className="bg-testGreen text-white p-4 rounded">
+    Test Green Background
+  </div>
+  <div className="bg-testOrange text-white p-4 rounded">
+    Test Orange Background
+  </div>
+</div>
+
+        {/* ✅ Test: Custom variable-based colors */}
+        <div className="bg-background text-foreground p-4 rounded shadow">
+          ✅ Background + text colors working from CSS Variables!
+        </div>
 
         <div className="bg-white rounded-xl shadow p-6">
           <h2 className="text-xl font-semibold mb-2">📉 Balance</h2>
-          <p className={`text-2xl ${balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+          <p
+            className={`text-2xl ${
+              balance >= 0 ? "text-green-600" : "text-red-600"
+            }`}
+          >
             ${balance.toFixed(2)}
           </p>
         </div>
