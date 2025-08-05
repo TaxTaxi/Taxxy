@@ -1,57 +1,73 @@
-// app/tax-report/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useIncomeStore } from "@/store/incomeStore";
 import { useTransactionStore } from "@/store/transactionStore";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 
 export default function TaxReportPage() {
- const { transactions, loadTransactions } = useTransactionStore();
-
-  const [report, setReport] = useState<null | {
-    totalIncome: number;
-    totalWriteOffs: number;
-    estimatedTax: number;
-  }>(null);
-
-useEffect(() => {
-  loadTransactions();
-}, [loadTransactions]);
+  const { income, loadIncome } = useIncomeStore();
+  const { transactions, loadTransactions } = useTransactionStore();
 
   useEffect(() => {
-    const income = transactions.reduce((sum, tx) => {
-      return sum + (tx.amount > 0 ? tx.amount : 0);
-    }, 0);
+    loadIncome();
+    loadTransactions();
+  }, []);
 
-    const writeOffs = transactions.reduce((sum, tx) => {
-      return sum + (tx.writeOff?.isWriteOff ? tx.amount : 0);
-    }, 0);
-
-    const estimatedTax = (income - writeOffs) * 0.25; // simple 25% estimate
-
-    setReport({
-      totalIncome: income,
-      totalWriteOffs: writeOffs,
-      estimatedTax,
-    });
-  }, [transactions]);
+  const totalIncome = income.reduce((sum, item) => sum + item.amount, 0);
+  const totalExpenses = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+  const businessExpenses = transactions
+    .filter((tx) => tx.purpose === "business")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const personalExpenses = transactions
+    .filter((tx) => tx.purpose === "personal")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const writeOffTotal = transactions
+    .filter((tx) => tx.writeOff?.isWriteOff)
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const netBalance = totalIncome - totalExpenses;
 
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-6">
-      <h1 className="text-3xl font-bold">🧾 Tax Report Summary</h1>
+    <div className="min-h-screen p-8 bg-white text-black">
+      <h1 className="text-3xl font-bold mb-6">📄 Tax Report</h1>
 
-      {report && (
-        <Card>
-          <CardContent className="space-y-4 pt-6">
-            <div>Total Income: ${report.totalIncome.toFixed(2)}</div>
-            <div>Write-Offs: ${report.totalWriteOffs.toFixed(2)}</div>
-            <div>Estimated Tax Owed (25%): ${report.estimatedTax.toFixed(2)}</div>
-          </CardContent>
-        </Card>
-      )}
+      <div className="space-y-4">
+        <div className="border p-4 rounded">
+          <h2 className="text-xl font-semibold mb-2">Total Income</h2>
+          <p>${totalIncome.toFixed(2)}</p>
+        </div>
 
-      <Button disabled>Download PDF (Coming Soon)</Button>
+        <div className="border p-4 rounded">
+          <h2 className="text-xl font-semibold mb-2">Total Expenses</h2>
+          <p>${totalExpenses.toFixed(2)}</p>
+        </div>
+
+        <div className="border p-4 rounded">
+          <h2 className="text-xl font-semibold mb-2">Business Expenses</h2>
+          <p>${businessExpenses.toFixed(2)}</p>
+        </div>
+
+        <div className="border p-4 rounded">
+          <h2 className="text-xl font-semibold mb-2">Personal Expenses</h2>
+          <p>${personalExpenses.toFixed(2)}</p>
+        </div>
+
+        <div className="border p-4 rounded">
+          <h2 className="text-xl font-semibold mb-2">Write-Offs Total</h2>
+          <p>${writeOffTotal.toFixed(2)}</p>
+        </div>
+
+        <div className="border p-4 rounded">
+          <h2 className="text-xl font-semibold mb-2">Net Balance</h2>
+          <p>${netBalance.toFixed(2)}</p>
+        </div>
+      </div>
+
+      <button
+        onClick={() => window.print()}
+        className="mt-8 px-6 py-3 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition"
+      >
+        📥 Print or Save as PDF
+      </button>
     </div>
   );
 }

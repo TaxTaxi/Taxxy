@@ -50,6 +50,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     const newTx: Omit<Transaction, "id"> = {
       ...item,
       category: "unassigned",
+      reviewed: false,
     };
 
     const { data, error } = await supabase
@@ -66,31 +67,43 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     // 🧠 AI tagging request
     try {
+      console.log("🧠 Starting AI classification for:", inserted.description);
+      
       const res = await fetch("/api/aitag", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `Classify this transaction and return a JSON object with "tag", "category", "confidence", "purpose", and "writeOff".\n\nDescription: "${inserted.description}"`,
+          prompt: inserted.description,
         }),
       });
 
-      const json = await res.json();
-      console.log("🧠 AI Tagging Result:", json);
+      if (!res.ok) {
+        throw new Error(`AI API returned ${res.status}: ${res.statusText}`);
+      }
 
-      const { tag, category, confidence, purpose, writeOff } = json;
+      const aiResult = await res.json();
+      console.log("🧠 AI Tagging Result:", aiResult);
 
+      // Validate and clean the AI result
       const updates = {
-        tag,
-        category: category || "unassigned",
-        confidence:
-          typeof confidence === "number"
-            ? confidence
-            : parseFloat(confidence) || 0,
-        purpose: purpose === "business" ? "business" : "personal",
-        writeOff: writeOff ?? { isWriteOff: false, reason: "" },
+        tag: aiResult.tag || "untagged",
+        category: aiResult.category || "unassigned",
+        confidence: typeof aiResult.confidence === "number" 
+          ? Math.round(aiResult.confidence * 100) // Convert 0-1 to 0-100
+          : typeof aiResult.confidence === "string" 
+          ? Math.round(parseFloat(aiResult.confidence) * 100)
+          : 0,
+        purpose: aiResult.purpose === "business" ? "business" : "personal",
+        writeOff: aiResult.writeOff && typeof aiResult.writeOff === "object" 
+          ? {
+              isWriteOff: Boolean(aiResult.writeOff.isWriteOff),
+              reason: aiResult.writeOff.reason || ""
+            }
+          : { isWriteOff: false, reason: "" },
+        reviewed: false, // Mark as unreviewed since it's AI-classified
       };
 
-      console.log("📦 Writing this to Supabase:", updates);
+      console.log("📦 Writing these updates to Supabase:", updates);
 
       const { error: updateError } = await supabase
         .from("transactions")
@@ -99,16 +112,24 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
       if (updateError) {
         console.error("❌ Update failed:", updateError);
+        // Still add the transaction to local state even if AI update failed
+        set((state) => ({
+          transactions: [...state.transactions, inserted],
+        }));
+        return;
       }
 
+      // ✅ Success - add the fully updated transaction to local state
+      const updatedTransaction = { ...inserted, ...updates };
       set((state) => ({
-        transactions: [
-          ...state.transactions,
-          { ...inserted, ...updates },
-        ],
+        transactions: [...state.transactions, updatedTransaction],
       }));
+
+      console.log("✅ Transaction successfully added and classified");
+
     } catch (err) {
       console.error("❌ AI tagging failed:", err);
+      // Fall back to adding the unclassified transaction
       set((state) => ({
         transactions: [...state.transactions, inserted],
       }));
@@ -127,67 +148,73 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }));
   },
 
- updatePurpose: async (id, newPurpose, newReason) => {
-  const { transactions } = get();
-  const existingTx = transactions.find((tx) => tx.id === id);
-  const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null;
+  updatePurpose: async (id, newPurpose, newReason) => {
+    const { transactions } = get();
+    const existingTx = transactions.find((tx) => tx.id === id);
+    const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null;
 
-  if (!existingTx) {
-    console.error("Transaction not found");
-    return;
-  }
-
-  const update = {
-    purpose: newPurpose,
-    ...(newReason ? { writeOff: { isWriteOff: true, reason: newReason } } : {}),
-  };
-
-  const { error } = await supabase
-    .from("transactions")
-    .update(update)
-    .eq("id", id);
-
-  if (error) {
-    console.error("❌ Failed to update purpose or write-off:", error);
-    return;
-  }
-
-  // 🧠 Log correction if there's a change
-  const changedPurpose = existingTx.purpose !== newPurpose;
-  const changedReason = (existingTx.writeOff?.reason || "") !== (newReason || "");
-
-  if ((changedPurpose || changedReason) && user) {
-    const { error: correctionError } = await supabase.from("corrections").insert([
-      {
-        transaction_description: existingTx.description,
-          original_tag: existingTx.tag ?? "unknown",
-        original_purpose: existingTx.purpose,
-        corrected_purpose: newPurpose,
-        original_reason: existingTx.writeOff?.reason || null,
-        corrected_reason: newReason || null,
-        date: new Date().toISOString(),
-        user_id: user.id,
-      },
-    ]);
-
-    if (correctionError) {
-      console.error("❌ Failed to log correction:", correctionError);
+    if (!existingTx) {
+      console.error("Transaction not found");
+      return;
     }
-  }
 
-  // ✅ Update local state
-  set((state) => ({
-    transactions: state.transactions.map((tx) =>
-      tx.id === id
-        ? {
-            ...tx,
-            purpose: newPurpose,
-            writeOff: newReason
-              ? { isWriteOff: true, reason: newReason }
-              : tx.writeOff,
-          }
-        : tx
-    ),
-  }));
-},
-}))
+    const update = {
+      purpose: newPurpose,
+      reviewed: true, // Mark as reviewed when user makes changes
+      ...(newReason ? { 
+        writeOff: { isWriteOff: true, reason: newReason } 
+      } : {}),
+    };
+
+    const { error } = await supabase
+      .from("transactions")
+      .update(update)
+      .eq("id", id);
+
+    if (error) {
+      console.error("❌ Failed to update purpose or write-off:", error);
+      return;
+    }
+
+    // 🧠 Log correction if there's a change
+    const changedPurpose = existingTx.purpose !== newPurpose;
+    const changedReason = (existingTx.writeOff?.reason || "") !== (newReason || "");
+
+    if ((changedPurpose || changedReason) && user) {
+      const { error: correctionError } = await supabase.from("corrections").insert([
+        {
+          transaction_description: existingTx.description,
+          original_tag: existingTx.tag ?? "unknown",
+          original_purpose: existingTx.purpose,
+          corrected_purpose: newPurpose,
+          original_reason: existingTx.writeOff?.reason || null,
+          corrected_reason: newReason || null,
+          date: new Date().toISOString(),
+          user_id: user.id,
+        },
+      ]);
+
+      if (correctionError) {
+        console.error("❌ Failed to log correction:", correctionError);
+      } else {
+        console.log("✅ Correction logged for future AI learning");
+      }
+    }
+
+    // ✅ Update local state
+    set((state) => ({
+      transactions: state.transactions.map((tx) =>
+        tx.id === id
+          ? {
+              ...tx,
+              purpose: newPurpose,
+              reviewed: true,
+              writeOff: newReason
+                ? { isWriteOff: true, reason: newReason }
+                : tx.writeOff,
+            }
+          : tx
+      ),
+    }));
+  },
+}));
