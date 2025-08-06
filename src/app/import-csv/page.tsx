@@ -1,5 +1,5 @@
-// src/app/import-// src/app/import-csv/page.tsx
-import CSVImport from '../../components/CSVImport'; // Adjust this path to match your actual component location
+// src/app/import-csv/page.tsx
+import CSVImport from '../../components/CSVImport';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {

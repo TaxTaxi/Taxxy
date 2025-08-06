@@ -30,12 +30,21 @@ export default function RootLayout({
           <Link href="/" className="hover:text-blue-600 transition-colors duration-300">
             Dashboard
           </Link>
+          <Link href="/transactions" className="hover:text-blue-600 transition-colors duration-300">
+            Transactions
+          </Link>
+          <Link href="/import-csv" className="hover:text-blue-600 transition-colors duration-300">
+            Import CSV
+          </Link>
           <Link href="/bills" className="hover:text-blue-600 transition-colors duration-300">
             Bills
           </Link>
           <Link href="/taxes" className="hover:text-blue-600 transition-colors duration-300">
             Taxes
           </Link>
+          <Link href="/tax-onboarding" className="hover:text-blue-600 transition-colors duration-300">
+  Tax Setup
+</Link>
           <Link href="/banks" className="hover:text-blue-600 transition-colors duration-300">
             Bank Accounts
           </Link>

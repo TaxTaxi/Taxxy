@@ -1,5 +1,5 @@
 // src/app/api/transactions/import-csv/route.ts
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -37,7 +37,30 @@ interface ClassificationResult {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
+    const cookieStore = await cookies();
+    
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              );
+            } catch {
+              // The `setAll` method was called from a Server Component.
+              // This can be ignored if you have middleware refreshing
+              // user sessions.
+            }
+          },
+        },
+      }
+    );
     
     // Check if user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -124,26 +147,38 @@ export async function POST(request: NextRequest) {
       // Process AI classification for each transaction
       const classificationPromises = insertedTransactions.map(async (transaction: any) => {
         try {
-          // You'll need to import your AI classification function
-          // const aiResult = await classifyTransaction(transaction.description, transaction.amount);
-          
-          // For now, let's create a mock classification
-          const aiResult: AIResult = {
-            tag: 'business',
-            category: 'office_supplies',
-            purpose: 'Business expense',
-            confidence: Math.random() * 100 // Random confidence for testing
-          };
+          // Call your existing AI tagging API
+          const aiResponse = await fetch(`${request.nextUrl.origin}/api/aitag`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: transaction.description,
+            }),
+          });
+
+          if (!aiResponse.ok) {
+            throw new Error(`AI API returned ${aiResponse.status}`);
+          }
+
+          const aiResult = await aiResponse.json();
           
           // Update transaction with AI classification
           const { error: updateError } = await supabase
             .from('transactions')
             .update({
-              ai_tag: aiResult.tag,
-              ai_category: aiResult.category,
-              ai_purpose: aiResult.purpose,
-              ai_confidence: aiResult.confidence,
-              ai_classified_at: new Date().toISOString()
+              tag: aiResult.tag || 'untagged',
+              category: aiResult.category || 'unassigned',
+              confidence: typeof aiResult.confidence === 'number' 
+                ? Math.round(aiResult.confidence * 100)
+                : 20, // Low confidence fallback
+              purpose: aiResult.purpose === 'business' ? 'business' : 'personal',
+              writeOff: aiResult.writeOff && typeof aiResult.writeOff === 'object' 
+                ? {
+                    isWriteOff: Boolean(aiResult.writeOff.isWriteOff),
+                    reason: aiResult.writeOff.reason || ''
+                  }
+                : { isWriteOff: false, reason: '' },
+              reviewed: false,
             })
             .eq('id', transaction.id);
 
@@ -153,7 +188,11 @@ export async function POST(request: NextRequest) {
           }
 
           // Determine if needs review based on confidence
-          if (aiResult.confidence >= 75) {
+          const confidence = typeof aiResult.confidence === 'number' 
+            ? Math.round(aiResult.confidence * 100) 
+            : 20;
+            
+          if (confidence >= 75) {
             return { aiClassified: true } as ClassificationResult;
           } else {
             return { needsReview: true } as ClassificationResult;
