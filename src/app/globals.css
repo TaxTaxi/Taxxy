@@ -43,6 +43,8 @@
 
 body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .dark {
@@ -77,13 +79,6 @@ body {
   --sidebar-accent-foreground: oklch(0.985 0.001 106.423);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.553 0.013 58.071);
-}
-
-@layer base {
-  body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
-  }
 }
 
 @layer utilities {

@@ -1,3 +1,4 @@
+// src/store/transactionStore.ts - Updated with AI learning metadata
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 
@@ -15,6 +16,12 @@ export interface Transaction {
     isWriteOff: boolean;
     reason: string;
   };
+  
+  // 🧠 NEW: AI Learning metadata
+  learnedFrom?: number; // Number of corrections AI learned from
+  correctionInfluence?: number; // Confidence boost from learning (0-1)
+  learningVersion?: string; // Track which AI version classified this
+  manualOverride?: boolean; // User manually corrected this
 }
 
 type TransactionState = {
@@ -41,6 +48,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     const parsed = data.map((tx: any) => ({
       ...tx,
       writeOff: tx.writeOff || undefined,
+      // Handle learning metadata
+      learnedFrom: tx.learnedFrom || 0,
+      correctionInfluence: tx.correctionInfluence || 0,
+      learningVersion: tx.learningVersion || null,
+      manualOverride: tx.manualOverride || false,
     }));
 
     set({ transactions: parsed });
@@ -65,9 +77,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     const inserted = data[0];
 
-    // 🧠 AI tagging request
+    // 🧠 AI tagging request with enhanced learning
     try {
-      console.log("🧠 Starting AI classification for:", inserted.description);
+      console.log("🧠 Starting enhanced AI classification for:", inserted.description);
       
       const res = await fetch("/api/aitag", {
         method: "POST",
@@ -82,9 +94,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       }
 
       const aiResult = await res.json();
-      console.log("🧠 AI Tagging Result:", aiResult);
+      console.log("🧠 Enhanced AI Tagging Result:", aiResult);
 
-      // Validate and clean the AI result
+      // 🎯 Enhanced updates with learning metadata
       const updates = {
         tag: aiResult.tag || "untagged",
         category: aiResult.category || "unassigned",
@@ -92,7 +104,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           ? Math.round(aiResult.confidence * 100) // Convert 0-1 to 0-100
           : typeof aiResult.confidence === "string" 
           ? Math.round(parseFloat(aiResult.confidence) * 100)
-          : 0,
+          : 20, // Default low confidence
         purpose: aiResult.purpose === "business" ? "business" : "personal",
         writeOff: aiResult.writeOff && typeof aiResult.writeOff === "object" 
           ? {
@@ -100,10 +112,16 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
               reason: aiResult.writeOff.reason || ""
             }
           : { isWriteOff: false, reason: "" },
-        reviewed: false, // Mark as unreviewed since it's AI-classified
+        reviewed: false,
+        
+        // 🧠 NEW: Learning metadata from enhanced AI
+        learnedFrom: aiResult.learnedFrom || 0,
+        correctionInfluence: aiResult.correctionInfluence || 0,
+        learningVersion: "enhanced-v1", // Track learning system version
+        manualOverride: false
       };
 
-      console.log("📦 Writing these updates to Supabase:", updates);
+      console.log("📦 Writing enhanced updates to Supabase:", updates);
 
       const { error: updateError } = await supabase
         .from("transactions")
@@ -111,7 +129,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         .eq("id", inserted.id);
 
       if (updateError) {
-        console.error("❌ Update failed:", updateError);
+        console.error("❌ Enhanced update failed:", updateError);
         // Still add the transaction to local state even if AI update failed
         set((state) => ({
           transactions: [...state.transactions, inserted],
@@ -119,16 +137,16 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         return;
       }
 
-      // ✅ Success - add the fully updated transaction to local state
+      // ✅ Success - add the fully updated transaction with learning metadata
       const updatedTransaction = { ...inserted, ...updates };
       set((state) => ({
         transactions: [...state.transactions, updatedTransaction],
       }));
 
-      console.log("✅ Transaction successfully added and classified");
+      console.log(`✅ Transaction classified with learning: ${updates.learnedFrom} examples, confidence: ${updates.confidence}%`);
 
     } catch (err) {
-      console.error("❌ AI tagging failed:", err);
+      console.error("❌ Enhanced AI tagging failed:", err);
       // Fall back to adding the unclassified transaction
       set((state) => ({
         transactions: [...state.transactions, inserted],
@@ -158,9 +176,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       return;
     }
 
+    // 🧠 Enhanced update with learning metadata
     const update = {
       purpose: newPurpose,
       reviewed: true, // Mark as reviewed when user makes changes
+      manualOverride: true, // 🧠 NEW: Mark as manually corrected for learning
       ...(newReason ? { 
         writeOff: { isWriteOff: true, reason: newReason } 
       } : {}),
@@ -176,7 +196,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       return;
     }
 
-    // 🧠 Log correction if there's a change
+    // 🧠 Enhanced correction logging for better learning
     const changedPurpose = existingTx.purpose !== newPurpose;
     const changedReason = (existingTx.writeOff?.reason || "") !== (newReason || "");
 
@@ -191,17 +211,21 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
           corrected_reason: newReason || null,
           date: new Date().toISOString(),
           user_id: user.id,
+          
+          // 🧠 NEW: Additional learning metadata
+          confidence_before: existingTx.confidence || 0,
+          learned_from_count: existingTx.learnedFrom || 0,
         },
       ]);
 
       if (correctionError) {
-        console.error("❌ Failed to log correction:", correctionError);
+        console.error("❌ Failed to log enhanced correction:", correctionError);
       } else {
-        console.log("✅ Correction logged for future AI learning");
+        console.log("✅ Enhanced correction logged - AI will learn from this feedback");
       }
     }
 
-    // ✅ Update local state
+    // ✅ Update local state with enhanced metadata
     set((state) => ({
       transactions: state.transactions.map((tx) =>
         tx.id === id
@@ -209,6 +233,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
               ...tx,
               purpose: newPurpose,
               reviewed: true,
+              manualOverride: true, // 🧠 NEW: Track manual corrections
               writeOff: newReason
                 ? { isWriteOff: true, reason: newReason }
                 : tx.writeOff,

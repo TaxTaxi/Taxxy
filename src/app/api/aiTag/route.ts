@@ -1,4 +1,4 @@
-// src/app/api/aitag/route.ts
+// src/app/api/aitag/route.ts - Enhanced with better learning
 import { OpenAI } from "openai";
 import { getRelevantCorrections } from "@/utils/getRelevantCorrections";
 import { NextRequest, NextResponse } from "next/server";
@@ -11,64 +11,62 @@ export async function POST(req: NextRequest) {
   try {
     const { prompt: description } = await req.json();
 
-    // 🔍 Get relevant past corrections
+    // 🔍 Get relevant past corrections with enhanced matching
     const examples = await getRelevantCorrections(description);
-    let correctionExamples = "";
+    
+    // 🧠 Build learning context from corrections
+    const learningContext = buildLearningContext(examples, description);
+    
+    // 📊 Calculate confidence adjustment based on correction history
+    const confidenceAdjustment = calculateConfidenceAdjustment(examples, description);
 
-    if (examples.length > 0) {
-      correctionExamples = examples
-        .map(
-          (c, i) => `Example ${i + 1}:
-Original: "${c.original.reason}" (${c.original.purpose})
-Corrected: "${c.corrected.reason}" (${c.corrected.purpose})`
-        )
-        .join("\n\n");
-    }
-
-    // 🧠 Improved AI prompt with better instructions
     const fullPrompt = `
-You are a financial classification assistant. Given a transaction description, return a JSON object with the following fields:
+You are an expert financial transaction classifier. You learn from user corrections to improve accuracy.
 
+IMPORTANT LEARNING FROM USER FEEDBACK:
+${learningContext}
+
+CLASSIFICATION RULES:
+1. Business expenses: Office supplies, software, business meals, travel, equipment, professional services
+2. Personal expenses: Groceries, entertainment, personal shopping, personal medical
+3. If uncertain, lean toward "personal" with lower confidence
+4. Use specific, actionable writeOff reasons when applicable
+
+Return JSON in this exact format:
 {
-  "tag": string (short descriptive tag),
-  "category": string (expense category),  
-  "confidence": number (between 0 and 1, where 1 is very confident),
+  "tag": "short descriptive tag",
+  "category": "expense category", 
+  "confidence": number (0-1, where 1 is very confident),
   "purpose": "business" or "personal",
   "writeOff": {
     "isWriteOff": boolean,
-    "reason": string
+    "reason": "specific tax deduction reason or empty string"
   }
 }
 
-IMPORTANT: 
-- If you are uncertain about the classification, set confidence to a low value (0.3-0.6)
-- For very vague descriptions, still provide your best guess but with low confidence
-- ALWAYS return valid JSON, never return plain text
-- If unsure between business/personal, lean toward "personal" with low confidence
+Transaction to classify: "${description}"
 
-Description: "${description}"
-
-Previous user corrections to guide you:
-${correctionExamples || "(no previous examples)"}
+${examples.length > 0 ? `
+Based on your past corrections, pay special attention to these patterns:
+${formatCorrectionPatterns(examples)}
+` : ''}
     `;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o", // Use latest model for better reasoning
       messages: [{ role: "user", content: fullPrompt }],
-      temperature: 0.3, // Lower temperature for more consistent responses
+      temperature: 0.1, // Lower temperature for consistency
+      max_tokens: 300
     });
 
     const content = response.choices?.[0]?.message?.content?.trim();
-    console.log("🧠 Raw AI response:", content);
 
     if (!content) {
       throw new Error("OpenAI returned empty response");
     }
 
-    // Improved JSON parsing with better error handling
     let parsed;
     try {
-      // Try to find JSON in the response
       const jsonStart = content.indexOf("{");
       const jsonEnd = content.lastIndexOf("}");
       
@@ -79,70 +77,171 @@ ${correctionExamples || "(no previous examples)"}
       const jsonString = content.slice(jsonStart, jsonEnd + 1);
       parsed = JSON.parse(jsonString);
       
-      // Validate required fields exist
-      if (typeof parsed !== 'object' || parsed === null) {
-        throw new Error("Parsed result is not an object");
-      }
-      
     } catch (parseError) {
       console.error("❌ JSON parsing failed:", parseError);
-      console.error("❌ Content that failed to parse:", content);
+      console.error("❌ Raw content:", content);
       
-      // Fallback: Return low confidence "uncertain" classification
+      // Enhanced fallback with better defaults
       parsed = {
-        tag: "uncertain",
-        category: "unassigned", 
-        confidence: 0.2, // Very low confidence
-        purpose: "personal", // Default to personal when uncertain
-        writeOff: {
-          isWriteOff: false,
-          reason: "Classification uncertain - needs manual review"
-        }
+        tag: extractKeywords(description),
+        category: guessCategory(description),
+        confidence: 0.15, // Very low confidence for parse failures
+        purpose: "personal",
+        writeOff: { isWriteOff: false, reason: "Classification uncertain - manual review needed" }
       };
-      
-      console.log("🔄 Using fallback classification:", parsed);
     }
 
-    // Ensure all required fields exist with proper defaults
+    // 🎯 Apply learning-based confidence adjustment
+    let finalConfidence = typeof parsed.confidence === "number" ? parsed.confidence : 0.2;
+    finalConfidence = Math.min(1.0, finalConfidence + confidenceAdjustment);
+    
+    // 🔒 Ensure minimum confidence bounds
+    if (finalConfidence < 0.1) finalConfidence = 0.1;
+    if (finalConfidence > 0.95) finalConfidence = 0.95; // Never be 100% confident
+
     const result = {
-      tag: parsed.tag || "unassigned",
-      category: parsed.category || "unassigned",
-      confidence: typeof parsed.confidence === "number" && parsed.confidence > 0 
-        ? parsed.confidence 
-        : 0.2, // Default to low confidence, not 0
+      tag: parsed.tag || extractKeywords(description),
+      category: parsed.category || guessCategory(description),
+      confidence: finalConfidence,
       purpose: (parsed.purpose === "business" || parsed.purpose === "personal") 
         ? parsed.purpose 
-        : "personal", // Default to personal when uncertain
+        : inferPurposeFromDescription(description),
       writeOff: {
         isWriteOff: Boolean(parsed.writeOff?.isWriteOff),
-        reason: parsed.writeOff?.reason || "AI classification uncertain"
-      }
+        reason: parsed.writeOff?.reason || ""
+      },
+      // 🎓 Add learning metadata
+      learnedFrom: examples.length,
+      correctionInfluence: confidenceAdjustment
     };
 
-    // Additional validation - ensure confidence is reasonable
-    if (result.confidence === 0) {
-      result.confidence = 0.2; // Never return 0 confidence
-    }
-
-    console.log("✅ Final validated AI result:", result);
+    console.log(`✅ AI classified with ${examples.length} learning examples, confidence: ${finalConfidence.toFixed(2)}`);
+    
     return NextResponse.json(result);
 
   } catch (err) {
     console.error("❌ AI API error:", err);
     
-    // Return a safe fallback instead of failing completely
-    const fallbackResult = {
-      tag: "error",
+    const { prompt: description } = await req.json().catch(() => ({ prompt: "unknown" }));
+    
+    const safeFallback = {
+      tag: extractKeywords(description),
       category: "unassigned",
-      confidence: 0.1, // Very low confidence to indicate error
+      confidence: 0.05, // Extremely low for errors
       purpose: "personal",
       writeOff: {
         isWriteOff: false,
-        reason: "AI service temporarily unavailable - needs manual review"
-      }
+        reason: "AI service error - requires manual classification"
+      },
+      learnedFrom: 0,
+      correctionInfluence: 0
     };
     
-    console.log("🚨 Returning error fallback:", fallbackResult);
-    return NextResponse.json(fallbackResult);
+    return NextResponse.json(safeFallback);
   }
+}
+
+// 🧠 Build rich learning context from corrections
+function buildLearningContext(examples: any[], currentDescription: string): string {
+  if (examples.length === 0) {
+    return "(No previous corrections found - learning from scratch)";
+  }
+
+  const learningPoints: string[] = [];
+  
+  examples.forEach((correction, index) => {
+    const original = correction.original_purpose || "unknown";
+    const corrected = correction.corrected_purpose || "unknown";
+    const reason = correction.corrected_reason || correction.original_reason || "";
+    
+    if (original !== corrected) {
+      learningPoints.push(
+        `Learning ${index + 1}: "${correction.transaction_description}" was initially classified as ${original} but you corrected it to ${corrected}. ${reason ? `Reason: "${reason}"` : ""}`
+      );
+    }
+  });
+
+  if (learningPoints.length === 0) {
+    return "(Previous corrections reviewed - no major pattern changes detected)";
+  }
+
+  return learningPoints.join("\n");
+}
+
+// 📊 Calculate confidence boost/penalty based on correction history
+function calculateConfidenceAdjustment(examples: any[], description: string): number {
+  if (examples.length === 0) return 0;
+
+  let adjustment = 0;
+  const descWords = description.toLowerCase().split(/\s+/);
+  
+  examples.forEach(correction => {
+    const correctionDesc = correction.transaction_description.toLowerCase();
+    const wordOverlap = descWords.filter(word => 
+      word.length > 3 && correctionDesc.includes(word)
+    ).length;
+    
+    if (wordOverlap > 0) {
+      // If we have similar transactions that were corrected, be more confident
+      // in applying those learnings
+      adjustment += Math.min(0.15, wordOverlap * 0.05);
+    }
+  });
+
+  return Math.min(0.3, adjustment); // Cap at 30% confidence boost
+}
+
+// 🏷️ Format correction patterns for AI learning
+function formatCorrectionPatterns(examples: any[]): string {
+  return examples.slice(0, 3).map((correction, i) => {
+    const purposeChange = correction.original_purpose !== correction.corrected_purpose 
+      ? `${correction.original_purpose} → ${correction.corrected_purpose}`
+      : correction.corrected_purpose;
+      
+    return `Pattern ${i + 1}: "${correction.transaction_description}" should be classified as ${purposeChange}`;
+  }).join("\n");
+}
+
+// 🔤 Extract keywords when parsing fails
+function extractKeywords(description: string): string {
+  const commonBusinessWords = ["software", "office", "meeting", "client", "business", "professional"];
+  const words = description.toLowerCase().split(/\s+/);
+  
+  const businessMatch = words.find(word => 
+    commonBusinessWords.some(bw => word.includes(bw))
+  );
+  
+  if (businessMatch) return `business-${businessMatch}`;
+  
+  // Extract first meaningful word
+  const meaningfulWord = words.find(word => word.length > 3);
+  return meaningfulWord || "transaction";
+}
+
+// 📂 Guess category from description
+function guessCategory(description: string): string {
+  const desc = description.toLowerCase();
+  
+  if (desc.includes("software") || desc.includes("subscription")) return "software";
+  if (desc.includes("office") || desc.includes("supplies")) return "office-supplies";
+  if (desc.includes("travel") || desc.includes("flight")) return "travel";
+  if (desc.includes("food") || desc.includes("restaurant") || desc.includes("meal")) return "meals";
+  if (desc.includes("gas") || desc.includes("fuel")) return "transportation";
+  
+  return "unassigned";
+}
+
+// 🎯 Infer purpose from description patterns
+function inferPurposeFromDescription(description: string): "business" | "personal" {
+  const desc = description.toLowerCase();
+  const businessIndicators = [
+    "software", "subscription", "office", "client", "meeting", 
+    "professional", "business", "work", "conference", "training"
+  ];
+  
+  const hasBusinessIndicator = businessIndicators.some(indicator => 
+    desc.includes(indicator)
+  );
+  
+  return hasBusinessIndicator ? "business" : "personal";
 }

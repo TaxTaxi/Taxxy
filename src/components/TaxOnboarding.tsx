@@ -1,3 +1,5 @@
+"use client";
+
 // src/components/TaxOnboarding.tsx
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, CheckCircle, User, Building2, Home, Car, Calculator, PiggyBank, FileText } from 'lucide-react';
@@ -88,7 +90,7 @@ const TaxOnboarding: React.FC = () => {
     itemizes_deductions: false,
     has_mortgage: false,
     has_student_loans: false,
-    health_insurance_type: '',
+    health_insurance_type: 'none',
     has_hsa: false,
     has_401k: false,
     has_ira: false,
@@ -178,6 +180,40 @@ const TaxOnboarding: React.FC = () => {
       case 0: // Personal Information
         return (
           <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Health Insurance</h3>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  How do you get health insurance?
+                </label>
+                <select
+                  value={profile.health_insurance_type}
+                  onChange={(e) => updateProfile('health_insurance_type', e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 mb-3"
+                >
+                  <option value="">Select insurance type...</option>
+                  <option value="employer">Through my employer</option>
+                  <option value="spouse_employer">Through spouse's employer</option>
+                  <option value="marketplace">Healthcare marketplace (ACA)</option>
+                  <option value="medicare">Medicare</option>
+                  <option value="medicaid">Medicaid</option>
+                  <option value="none">No health insurance</option>
+                </select>
+              </div>
+
+              <div className="space-y-3">
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={profile.has_hsa}
+                    onChange={(e) => updateProfile('has_hsa', e.target.checked)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">I have a Health Savings Account (HSA)</span>
+                </label>
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 What's your filing status?
@@ -524,6 +560,23 @@ const TaxOnboarding: React.FC = () => {
                   <span className="text-sm font-medium text-gray-700">I pay student loan interest</span>
                 </label>
               </div>
+
+              {/* Charitable Contributions */}
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Annual charitable contributions (optional)
+                </label>
+                <input
+                  type="number"
+                  value={profile.charitable_contributions_annual || ''}
+                  onChange={(e) => updateProfile('charitable_contributions_annual', parseFloat(e.target.value) || undefined)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="2500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Total amount you donate to qualified charities each year
+                </p>
+              </div>
             </div>
 
             <div>
@@ -643,7 +696,7 @@ const TaxOnboarding: React.FC = () => {
       case 4:
         return true; // Previous year is optional
       case 5:
-        return true; // Deductions are optional
+        return profile.health_insurance_type; // Require health insurance selection
       case 6:
         return true; // Review step
       default:
