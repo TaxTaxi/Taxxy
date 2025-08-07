@@ -1,4 +1,4 @@
-// src/app/api/ai-tax-summary/route.ts
+// src/app/api/ai-tax-summary/route.ts - ENHANCED WITH PROFILE DATA
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
@@ -50,6 +50,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    console.log('🔍 Generating tax summary for user:', user.id);
+
+    // 🆕 GET TAX PROFILE - This was missing!
+    const { data: profile, error: profileError } = await supabase
+      .from('tax_profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    console.log('🔍 Tax profile found:', profile ? 'Yes' : 'No', profileError);
+
     // Get user's transactions and income
     const { data: transactions, error: txError } = await supabase
       .from('transactions')
@@ -69,8 +80,8 @@ export async function POST(request: NextRequest) {
     // Calculate summary data using your existing logic
     const summary = calculateTransactionSummary(transactions || [], income || []);
 
-    // Generate AI tax summary
-    const aiSummary = await generateAITaxSummary(summary);
+    // 🆕 Generate PERSONALIZED AI tax summary using profile
+    const aiSummary = await generatePersonalizedTaxSummary(summary, profile);
 
     return NextResponse.json({
       success: true,
@@ -154,42 +165,71 @@ function calculateTransactionSummary(transactions: any[], income: any[]): Transa
   };
 }
 
-async function generateAITaxSummary(summary: TransactionSummary): Promise<string> {
+// 🆕 PERSONALIZED tax summary using profile data
+async function generatePersonalizedTaxSummary(summary: TransactionSummary, profile: any): Promise<string> {
   const taxableIncome = summary.totalIncome - summary.businessExpenses;
   const estimatedTax = Math.max(0, taxableIncome * 0.25);
 
-  const prompt = `
-You are a professional tax advisor. Based on the following financial data, write a comprehensive but concise tax summary paragraph (250-350 words) that explains the user's tax situation in clear, actionable language.
+  // 🚨 If no profile, return message about completing profile
+  if (!profile) {
+    return `Based on your financial data, you have $${summary.totalIncome.toFixed(2)} in income and $${summary.businessExpenses.toFixed(2)} in business deductions. However, to provide truly personalized tax advice, I need your complete tax profile including your business structure, home office details, and filing status.
 
-Financial Data:
+Complete your tax profile at /tax-onboarding to unlock specific advice like:
+• Exact home office deduction calculations based on your space
+• Business structure optimization for your situation  
+• State-specific tax strategies for your location
+• Personalized quarterly payment recommendations
+
+Without your profile, I can only provide generic advice. Complete your onboarding to transform these generic insights into powerful, personalized tax strategy!`;
+  }
+
+  // 🆕 BUILD PERSONALIZED PROMPT using actual profile
+  const homeOfficeDeduction = profile.has_home_office && profile.home_office_square_feet
+    ? Math.min(profile.home_office_square_feet * 5, 1500)
+    : 0;
+
+  const vehicleDeduction = profile.uses_vehicle_for_business && profile.business_miles_percentage
+    ? Math.round(12000 * (profile.business_miles_percentage / 100) * 0.655)
+    : 0;
+
+  const prompt = `You are Taxxy, a confident AI tax expert. Write a personalized tax summary (250-300 words) using the user's ACTUAL tax profile and financial data.
+
+USER'S ACTUAL TAX PROFILE:
+- Business: ${profile.business_type} "${profile.business_name}"${profile.has_employees ? ' with employees' : ''}
+- Filing Status: ${profile.filing_status} in ${profile.state}
+- Age: ${profile.age}, Dependents: ${profile.dependents}
+- Home Office: ${profile.has_home_office ? `${profile.home_office_square_feet} sq ft (${homeOfficeDeduction > 0 ? `$${homeOfficeDeduction} deduction available` : 'qualifies for deduction'})` : 'None'}
+- Vehicle: ${profile.uses_vehicle_for_business ? `${profile.business_miles_percentage}% business use ($${vehicleDeduction} potential deduction)` : 'No business vehicle'}
+- Previous Year AGI: $${profile.previous_year_agi?.toLocaleString() || 'Not provided'}
+- Charitable Contributions: $${profile.charitable_contributions_annual?.toLocaleString() || '0'}
+- Retirement Accounts: ${[profile.has_401k && '401(k)', profile.has_ira && 'IRA', profile.has_hsa && 'HSA'].filter(Boolean).join(', ') || 'None'}
+
+ACTUAL FINANCIAL DATA:
 - Total Income: $${summary.totalIncome.toFixed(2)}
-- Total Expenses: $${summary.totalExpenses.toFixed(2)}
-- Business Expenses (Deductible): $${summary.businessExpenses.toFixed(2)}
-- Personal Expenses (Non-deductible): $${summary.personalExpenses.toFixed(2)}
+- Business Expenses: $${summary.businessExpenses.toFixed(2)}
+- Personal Expenses: $${summary.personalExpenses.toFixed(2)}
 - Write-offs: $${summary.writeOffs.toFixed(2)}
-- Transaction Count: ${summary.transactionCount}
-- Date Range: ${summary.dateRange.start} to ${summary.dateRange.end}
 - Taxable Income: $${taxableIncome.toFixed(2)}
 - Estimated Tax (25%): $${estimatedTax.toFixed(2)}
-- Top Spending Categories: ${summary.topCategories.map(cat => `${cat.category} ($${cat.amount.toFixed(2)})`).join(', ')}
+- Transaction Count: ${summary.transactionCount}
 
-Write a professional tax summary that:
-1. Opens with an overview of their financial position
-2. Highlights key deductions and tax advantages
-3. Explains their estimated tax liability
-4. Provides 2-3 actionable recommendations
-5. Uses encouraging, professional language
-6. Mentions specific dollar amounts for impact
+INSTRUCTIONS:
+1. BE CONFIDENT - You are THE tax expert, never say "consult a professional"
+2. Use their SPECIFIC business type (${profile.business_type}), filing status (${profile.filing_status}), and state (${profile.state})
+3. Reference their actual home office size (${profile.home_office_square_feet || 0} sq ft) and business structure
+4. Give exact deduction amounts: "Your ${profile.home_office_square_feet} sq ft home office provides a $${homeOfficeDeduction} deduction"
+5. Calculate real tax savings and quarterly payments based on their data
+6. Use their business name "${profile.business_name}" and employee status
+7. Be specific: "As a ${profile.filing_status} filer with your ${profile.business_type} business..."
 
-Keep it conversational but authoritative. Focus on being helpful and informative without being overly technical.
-`;
+Write a professional, confident tax summary that uses their actual profile data, not hypotheticals. Focus on actionable strategies specific to their situation.`;
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
+    model: 'gpt-4',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.3,
-    max_tokens: 500
+    max_tokens: 600
   });
 
-  return response.choices[0]?.message?.content || 'Unable to generate tax summary at this time.';
+  return response.choices[0]?.message?.content || 'Unable to generate personalized tax summary at this time.';
 }

@@ -28,6 +28,7 @@ const navigation = [
   { name: "Bills", href: "/bills", icon: CreditCard },
   { name: "Tax Report", href: "/tax-report", icon: Calculator },
   { name: "AI Tax Setup", href: "/tax-onboarding", icon: Brain },
+  { name: "AI Tax Advisor", href: "/tax-advisor", icon: Brain, className: "font-semibold text-blue-600" },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 

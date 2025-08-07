@@ -177,6 +177,18 @@ export default function DashboardPage() {
           </div>
         </Link>
 
+        <Link href="/tax-advisor" className="card-enhanced p-6 hover-lift hover-glow group">
+  <div className="flex items-center space-x-4">
+    <div className="p-3 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
+      <Brain className="w-6 h-6 text-purple-600" />
+    </div>
+    <div>
+      <h3 className="font-semibold text-slate-900">AI Tax Advisor</h3>
+      <p className="text-sm text-slate-600">Get personalized tax advice</p>
+    </div>
+  </div>
+</Link>
+
         <Link href="/tax-onboarding" className="card-enhanced p-6 hover-lift hover-glow group">
           <div className="flex items-center space-x-4">
             <div className="p-3 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
